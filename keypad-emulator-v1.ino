@@ -1,9 +1,9 @@
-#include <mcp_can.h>
-#include <SPI.h>
-#include <PCF8574.h>
-#include <Wire.h>
+#include <mcp_can.h>  // library for MCP2515 ic
+#include <SPI.h>      // library for SPI communication
+#include <PCF8574.h>  // library for PCF8574 IO expander
+#include <Wire.h>     // library for I2C communication
 
-PCF8574 pcf20(0x38);
+PCF8574 pcf20(0x38);  // initialize PCF8574 IC at adress 0X38 ( A0 A1 A2 to ground)
 
 
 long unsigned int rxId;  // storage for can data
@@ -15,18 +15,11 @@ MCP_CAN CAN0(10);   // set CS pin to 10r
 
 
 
-unsigned long task1Interval = 50;  // 50ms interval for keep aliv frame
-unsigned long task2Interval = 50;  // 50ms interval for analogue value sending
-unsigned long task3Interval = 10;  // 3 second interval for task 3
-unsigned long task4Interval = 40;  // 4 second interval for task 4
-unsigned long task1Millis = 0;     // storage for millis counter
-unsigned long task2Millis = 0;     // storage for millis counter
-unsigned long task3Millis = 0;     // storage for millis counter
-unsigned long task4Millis = 0;     // storage for millis counter
+unsigned long KAinterval = 50;              // 50ms interval for keep aliv frame
+unsigned long ButtonInfoInterval = 30;      // 30ms interval for button info frame
+unsigned long KAintervalMillis = 0;         // storage for millis counter
+unsigned long ButtonInfoIntervalMillis = 0; // storage for millis counter
 
-
-bool button1;
-bool button2;
 
 
 void setup() {
@@ -46,13 +39,7 @@ void setup() {
   pinMode(CAN0_INT, INPUT);      // set INT pin to be an input
   digitalWrite(CAN0_INT, HIGH);  // set INT pin high to enable interna pullup
 
-  pinMode(5, INPUT);
-  digitalWrite(5, HIGH);
-  pinMode(6, INPUT);
-  digitalWrite(6, HIGH);
-
-
-  pcf20.begin();
+  pcf20.begin();  // start the PCF library
   
   Serial.println("All OK");  // all ready to go !
 }
@@ -64,36 +51,23 @@ void loop() {
 
   unsigned long currentMillis = millis();  // Get current time in milliseconds
 
-  // Execute task 1 every 1 second
-  if (currentMillis - task1Millis >= task1Interval) {
-    task1Millis = currentMillis;
+  // Execute keepalive frame every 50 ms
+  if (currentMillis - KAintervalMillis >= KAinterval) {
+    KAintervalMillis = currentMillis;
     SendKeepAlive();
   }
 
-  // Execute task 2 every 5 seconds
-  if (currentMillis - task2Millis >= task2Interval) {
-    task2Millis = currentMillis;
-    SendAnalogValues();
-  }
-
-  // Execute task 3 every 3 seconds
-  if (currentMillis - task3Millis >= task3Interval) {
-    task3Millis = currentMillis;
+  // Execute buttoninfo frame every 30 ms
+  if (currentMillis - ButtonInfoIntervalMillis >= ButtonInfoInterval) {
+    ButtonInfoIntervalMillis = currentMillis;
     SendButtonInfo();
-  }
-
-  // Execute task 4 every 4 seconds
-  if (currentMillis - task4Millis >= task4Interval) {
-    task4Millis = currentMillis;
-    task4();
   }
 
   // read can buffer when interrupted and jump to canread for processing.
   if (!digitalRead(CAN0_INT))  // If CAN0_INT pin is low, read receive buffer
   {
     CAN0.readMsgBuf(&rxId, &len, rxBuf);  // Read data: len = data length, buf = data byte(s)
-                                          // Serial.println("interuppted and read can !");
-    canRead();
+    canRead(); // execute canRead function to negotiate with ecu
   }
 }
 
@@ -121,8 +95,6 @@ void canRead() {
       b5 = 0;
       b6 = 0;
       b7 = 0;
-      //      SerialUSB.print("Type 34 frame identified ");
-      //      SerialUSB.print("\r\n");
 
     } else if ((rxBuf[0]) == 66) {
       b0 = 67;
@@ -160,8 +132,6 @@ void canRead() {
         b6 = 0;
         b7 = 0;
       }
-      //      SerialUSB.print("Type 66 Frame Identified");
-      //      SerialUSB.print("\r\n");
 
     } else if (((rxBuf[0]) == 0) && ((rxBuf[7]) == 200)) {
       b0 = 128;
@@ -172,8 +142,7 @@ void canRead() {
       b5 = 0;
       b6 = 4;
       b7 = 5;
-      //      SerialUSB.print("Type 0 Frame Identified");
-      //      SerialUSB.print("\r\n");
+
     }
     byte txBuf[8] = { b0, b1, b2, b3, b4, b5, b6, b7 };
     Serial.print(b0);
@@ -189,42 +158,32 @@ void canRead() {
 }
 
 void SendButtonInfo() {
-  byte ButtonInfo[3];
-  bitWrite(ButtonInfo[0], 0, !pcf20.readButton(0));
-  bitWrite(ButtonInfo[0], 1, !pcf20.readButton(1));
-  bitWrite(ButtonInfo[0], 2, 0);
-  bitWrite(ButtonInfo[0], 3, 0);
-  bitWrite(ButtonInfo[0], 4, 0);
-  bitWrite(ButtonInfo[0], 5, 0);
-  bitWrite(ButtonInfo[0], 6, 0);
-  bitWrite(ButtonInfo[0], 7, 0);
+  byte ButtonInfo[3];                                 // declare an array for 3 bytes used for key pressed information
+  bitWrite(ButtonInfo[0], 0, !pcf20.readButton(0));   // byte 0, bit 0, button 1 
+  bitWrite(ButtonInfo[0], 1, 0);                      // byte 0, bit 0, button 2
+  bitWrite(ButtonInfo[0], 2, 0);                      // byte 0, bit 0, button 3
+  bitWrite(ButtonInfo[0], 3, 0);                      // byte 0, bit 0, button 4
+  bitWrite(ButtonInfo[0], 4, 0);                      // byte 0, bit 0, button 5
+  bitWrite(ButtonInfo[0], 5, 0);                      // byte 0, bit 0, button 6
+  bitWrite(ButtonInfo[0], 6, 0);                      // byte 0, bit 0, button 7
+  bitWrite(ButtonInfo[0], 7, 0);                      // byte 0, bit 0, button 8
 
-  
-  ButtonInfo[1] = 0;
-  ButtonInfo[2] = 0;
-  CAN0.sendMsgBuf(0x18D, 0, 3, ButtonInfo);
+  bitWrite(ButtonInfo[1], 0, 0);                      // byte 1, bit 0, button 9
+  bitWrite(ButtonInfo[1], 1, 0);                      // byte 1, bit 1, button 10
+  bitWrite(ButtonInfo[1], 2, 0);                      // byte 1, bit 2, button 11
+  bitWrite(ButtonInfo[1], 3, 0);                      // byte 1, bit 2, button 12
+  bitWrite(ButtonInfo[1], 4, 0);                      // byte 1, bit 3, button 13
+  bitWrite(ButtonInfo[1], 5, 0);                      // byte 1, bit 4, button 14
+  bitWrite(ButtonInfo[1], 6, !pcf20.readButton(1));   // byte 1, bit 5, button 15
+  bitWrite(ButtonInfo[1], 7, 0);
+
+  ButtonInfo[2] = 0;                                  // byte 3 filled with 0
+  CAN0.sendMsgBuf(0x18D, 0, 3, ButtonInfo);           // send the 3 byte data buffer at adres 18D
 }
 
 
-
-
-
-
-
-
-
-
-
-
-void task4() {}
-
-
-
-void SendKeepAlive() {
-  byte KeepAlive[1] = { 5 };
-  CAN0.sendMsgBuf(0x70D, 0, 5, KeepAlive);
+void SendKeepAlive() {                                // send keep alive frame
+  byte KeepAlive[1] = { 5 };                          // frame dat is 0X05 for byte 0
+  CAN0.sendMsgBuf(0x70D, 0, 5, KeepAlive);            // send the frame at 70D 
 }
 
-void SendAnalogValues() {
-  //CAN0.sendMsgBuf(0x2C1, 0, 8, SendAnalogue);  // send the can message onto the bus
-}
