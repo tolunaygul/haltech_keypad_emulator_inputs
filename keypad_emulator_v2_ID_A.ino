@@ -145,7 +145,6 @@ void canRead() {
 
     }
     byte txBuf[8] = { b0, b1, b2, b3, b4, b5, b6, b7 };
-   
     CAN0.sendMsgBuf(0x58C, 0, 8, txBuf);
   }
 }
